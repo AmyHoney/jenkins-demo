@@ -72,6 +72,16 @@ control_vm_ip=`kubectl describe virtualmachines tkgs-cluster-$number-control-pla
 echo "Control Plane Node IP is "$control_vm_ip
 nodes_ip=`kubectl describe virtualmachines tkgs-cluster-$number-workers|grep "Vm Ip"|cut -d: -f2 -|sed 's/^[ \t]*//g' -`
 
+# check jumpbox if sshpass command exits
+while true; do
+  kubectl exec jumpbox -- bash -c sshpass
+  if [[ $? == 0 ]]; then
+    break
+  fi
+  echo "There is no sshpass command in the jumpbox"
+  exit
+done
+
 # patch api-server (control node)
 kubectl exec jumpbox -- bash -c "\
 {
