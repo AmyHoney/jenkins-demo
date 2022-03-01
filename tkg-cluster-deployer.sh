@@ -73,7 +73,7 @@ echo "Control Plane Node IP is "$control_vm_ip
 nodes_ip=`kubectl describe virtualmachines tkgs-cluster-$number-workers|grep "Vm Ip"|cut -d: -f2 -|sed 's/^[ \t]*//g' -`
 
 # patch api-server (control node)
-kubectl exec ubuntu -- bash -c "\
+kubectl exec jumpbox -- bash -c "\
 {
 ssh_password=$ssh_password
 for node in ${control_vm_ip}; do
