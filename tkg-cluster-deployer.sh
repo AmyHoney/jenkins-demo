@@ -27,35 +27,46 @@ kubectl config use-context $ns
 
 # create tkg cluster
 cat << EOF | kubectl apply -f -
-apiVersion: run.tanzu.vmware.com/v1alpha1  #TKGS API endpoint
-kind: TanzuKubernetesCluster               #required parameter
+apiVersion: run.tanzu.vmware.com/v1alpha2
+kind: TanzuKubernetesCluster                   
 metadata:
-  name: tkgs-cluster-$number               #cluster name, user defined
-  namespace: $ns                         #vsphere namespace
+  name: tkgs-ubucluster-$number                   
+  namespace: zyajing                   
 spec:
   distribution:
-    version: v1.19.11                         #Resolves to latest TKR 1.19 version
+    fullVersion: v1.20.8---vmware.1-tkg.2
   topology:
     controlPlane:
-      count: 1                             #number of control plane nodes
-      class: best-effort-medium            #vmclass for control plane nodes
-      storageClass: pacific-storage-policy     #storageclass for control plane
-    workers:
-      count: 7                             #number of worker nodes
-      class: best-effort-medium            #vmclass for worker nodes
-      storageClass: pacific-storage-policy     #storageclass for worker nodes
+      replicas: 1                                 
+      vmClass: guaranteed-xlarge                 
+      storageClass: pacific-storage-policy
+      volumes:
+        - name: etcd
+          mountPath: /var/lib/etcd
+          capacity:
+            storage: 20Gi
+    nodePools:
+    - name: workers
+      replicas: 3
+      vmClass: guaranteed-xlarge
+      storageClass: pacific-storage-policy
+      volumes:
+        - name: containerd
+          mountPath: /var/lib/containerd
+          capacity:
+            storage: 100Gi
   settings:
     storage:
       defaultClass: pacific-storage-policy
     network:
       proxy:
-        httpProxy: http://proxy.liuqi.me:3128  #Proxy URL for HTTP connections
-        httpsProxy: http://proxy.liuqi.me:3128 #Proxy URL for HTTPS connections
-        noProxy: [10.244.0.0/20,10.117.233.0/26,10.117.233.64/26,192.168.0.0/16,10.0.0.0/8,127.0.0.1,localhost,.svc,.svc.cluster.local] #SVC Pod, Egress, Ingress CIDRs
+        httpProxy: http://proxy.liuqi.io:3128  #Proxy URL for HTTP connections
+        httpsProxy: http://proxy.liuqi.io:3128 #Proxy URL for HTTPS connections
+        noProxy: [10.244.0.0/20,10.117.233.0/26,10.117.233.64/26,192.168.0.0/16,10.0.0.0/8,127.0.0.1,localhost,.svc,.svc.cluster.local] #SVC Pod, Egress, Ingress CIDRs   
 EOF
 
 while true; do
-  kubectl get tanzukubernetesclusters|grep tkgs-cluster-$number|grep "True    True"
+  kubectl get tanzukubernetesclusters|grep tkgs-ubucluster-$number|grep "True    True" 
   if [[ $? == 0 ]]; then
     break
   fi
@@ -65,22 +76,12 @@ done
 
 # get ssh password
 kubectl config use-context $ns
-ssh_password=`kubectl get secrets tkgs-cluster-$number-ssh-password -o jsonpath='{.data.ssh-passwordkey}' | base64 -d`
+ssh_password=`kubectl get secrets tkgs-ubucluster-$number-ssh-password -o jsonpath='{.data.ssh-passwordkey}' | base64 -d`
 echo $ssh_password
 
-control_vm_ip=`kubectl describe virtualmachines tkgs-cluster-$number-control-plane|grep "Vm Ip"|cut -d: -f2 -|sed 's/^[ \t]*//g' -`
+control_vm_ip=`kubectl describe virtualmachines tkgs-ubucluster-$number-control-plane|grep "Vm Ip"|cut -d: -f2 -|sed 's/^[ \t]*//g' -`
 echo "Control Plane Node IP is "$control_vm_ip
-nodes_ip=`kubectl describe virtualmachines tkgs-cluster-$number-workers|grep "Vm Ip"|cut -d: -f2 -|sed 's/^[ \t]*//g' -`
-
-# check jumpbox if sshpass command exits
-while true; do
-  kubectl exec jumpbox -- bash -c sshpass
-  if [[ $? == 0 ]]; then
-    break
-  fi
-  echo "There is no sshpass command in the jumpbox"
-  exit
-done
+nodes_ip=`kubectl describe virtualmachines tkgs-ubucluster-$number-workers|grep "Vm Ip"|cut -d: -f2 -|sed 's/^[ \t]*//g' -`
 
 # patch api-server (control node)
 kubectl exec jumpbox -- bash -c "\

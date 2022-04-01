@@ -17,13 +17,15 @@ echo "value number is $b"
 
 number=$b
 ns=$a
+# number=10
+# ns=zyajing
 server=10.117.233.2
 
 export PATH=./00-kubectl-vsphere-plugin/bin:$PATH
 export KUBECTL_VSPHERE_PASSWORD="Admin!23"
 
-kubectl vsphere login --server=$server --vsphere-username administrator@vsphere.local --insecure-skip-tls-verify --tanzu-kubernetes-cluster-namespace=$ns --tanzu-kubernetes-cluster-name=tkgs-cluster-$number
-kubectl config use-context tkgs-cluster-$number
+kubectl vsphere login --server=$server --vsphere-username administrator@vsphere.local --insecure-skip-tls-verify --tanzu-kubernetes-cluster-namespace=$ns --tanzu-kubernetes-cluster-name=tkgs-ubucluster-$number
+kubectl config use-context tkgs-ubucluster-$number
 
 echo "Patch PSP"
 
@@ -193,7 +195,6 @@ while true; do
   echo "Wait cluster-local-gateway base finish..."
 done
 
-
 echo "Install kubeflow namespace"
 
 kustomize build manifests-1.4-branch/common/kubeflow-namespace/base | kubectl apply -f -
@@ -216,6 +217,15 @@ while true; do
   fi
   sleep 10
   echo "Wait kubeflow pipelines finish..."
+done
+sleep 30 # wait 30s make cache-server-xxxx pod running
+while true; do
+   kubectl get pods -n kubeflow | grep "cache-server" | grep "Running"
+  if [[ $? == 0 ]]; then
+    break
+  fi
+  sleep 10
+  echo "Wait cache-server-xxx pods running in kubeflow namespace finish..."
 done
 
 echo "Install KFServing"
@@ -245,6 +255,15 @@ kustomize build manifests-1.4-branch/apps/jupyter/jupyter-web-app/upstream/overl
 echo "Install profiles and KFAM"
 
 kustomize build manifests-1.4-branch/apps/profiles/upstream/overlays/kubeflow | kubectl apply -f -
+sleep 30 # wait 30s make profiles-deployment-xxxx pod running. If no this step, there will not create pods in the kubeflow-use-example-com namespace
+while true; do
+   kubectl get pods -n kubeflow | grep "profiles-deployment" | grep "Running"
+  if [[ $? == 0 ]]; then
+    break
+  fi
+  sleep 10
+  echo "Wait profiles-deployment-xxx pods running in kubeflow namespace finish..."
+done
 
 echo "Install Volumes Web App"
 
